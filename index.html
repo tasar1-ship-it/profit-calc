@@ -209,6 +209,9 @@
   .metric-card.yearly {
     background: linear-gradient(135deg, #0ea5e9 0%, #06b6d4 100%);
   }
+  .metric-card.weekly {
+    background: linear-gradient(135deg, #f59e0b 0%, #ea580c 100%);
+  }
   .metric-card.payback {
     background: linear-gradient(135deg, #059669 0%, #0d9488 100%);
   }
@@ -465,7 +468,11 @@
 
     <!-- OUTPUT COLUMN -->
     <section id="outputPanel" class="lg:col-span-3">
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+        <div class="metric-card weekly">
+          <div class="metric-label">Absolute Weekly Profit</div>
+          <div class="metric-value num" id="absWeekly">—</div>
+        </div>
         <div class="metric-card monthly">
           <div class="metric-label">Absolute Monthly Profit</div>
           <div class="metric-value num" id="absMonthly">—</div>
@@ -756,7 +763,9 @@
 
     const absMonthly = cap * (monthly / 100);
     const absYearly = cap * (yearly / 100);
+    const absWeekly = absMonthly / 4;
 
+    setColored(document.getElementById("absWeekly"), absWeekly, formatCurrency(absWeekly));
     setColored(document.getElementById("absMonthly"), absMonthly, formatCurrency(absMonthly));
     setColored(document.getElementById("absYearly"), absYearly, formatCurrency(absYearly));
 
