@@ -397,6 +397,50 @@
     outline: 3px solid rgba(220, 38, 38, 0.35);
     outline-offset: 2px;
   }
+
+  .footer-actions {
+    display: flex;
+    gap: 0.6rem;
+    align-items: center;
+    flex-shrink: 0;
+  }
+  .btn-share {
+    background: #4f46e5;
+    color: #ffffff;
+    font-weight: 600;
+    font-size: 0.875rem;
+    padding: 0.65rem 1.3rem;
+    border: none;
+    border-radius: 9px;
+    cursor: pointer;
+    box-shadow:
+      0 1px 2px rgba(79, 70, 229, 0.25),
+      0 8px 20px -6px rgba(79, 70, 229, 0.4);
+    transition: background 0.15s, box-shadow 0.15s, transform 0.1s;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+  }
+  .btn-share:hover {
+    background: #4338ca;
+    box-shadow:
+      0 1px 2px rgba(79, 70, 229, 0.3),
+      0 10px 24px -6px rgba(79, 70, 229, 0.5);
+    transform: translateY(-1px);
+  }
+  .btn-share:active {
+    background: #3730a3;
+    transform: translateY(0);
+  }
+  .btn-share:focus-visible {
+    outline: 3px solid rgba(79, 70, 229, 0.35);
+    outline-offset: 2px;
+  }
+  .btn-share.copied {
+    background: #15803d;
+    box-shadow:
+      0 1px 2px rgba(21, 128, 61, 0.25),
+      0 8px 20px -6px rgba(21, 128, 61, 0.4);
+  }
 </style>
 </head>
 <body class="min-h-screen">
@@ -556,7 +600,10 @@
     <p class="footer-text">
       Linear model: yearly% = monthly% × 10 (10 productive months per year). Profits not reinvested. Saved locally on this device.
     </p>
-    <button type="button" class="btn-reset" onclick="window.__resetDashboard()">Reset to defaults</button>
+    <div class="footer-actions">
+      <button type="button" class="btn-share" id="shareBtn" onclick="window.__shareDashboard()">Share link</button>
+      <button type="button" class="btn-reset" onclick="window.__resetDashboard()">Reset to defaults</button>
+    </div>
   </footer>
 </div>
 
@@ -613,6 +660,58 @@
 
   function clearState() {
     try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+  }
+
+  // ---------- URL parameters (for shareable links) ----------
+  function readUrlParams() {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      let applied = false;
+
+      const cap = params.get("cap");
+      if (cap !== null) {
+        const v = parseFloat(cap);
+        if (isFinite(v) && v >= 0) { state.capital = v; applied = true; }
+      }
+      const cur = params.get("cur");
+      if (cur !== null && CURRENCY_META[cur]) {
+        state.currency = cur; applied = true;
+      }
+      const m = params.get("m");
+      if (m !== null) {
+        const v = parseFloat(m);
+        if (isFinite(v)) { state.monthlyPct = v; applied = true; }
+      }
+      const i = params.get("i");
+      if (i !== null) {
+        const v = parseFloat(i);
+        if (isFinite(v) && v >= 0 && v <= 100) { state.shares.investor = v; applied = true; }
+      }
+      const p1 = params.get("p1");
+      if (p1 !== null) {
+        const v = parseFloat(p1);
+        if (isFinite(v) && v >= 0 && v <= 100) { state.shares.party1 = v; applied = true; }
+      }
+      const p2 = params.get("p2");
+      if (p2 !== null) {
+        const v = parseFloat(p2);
+        if (isFinite(v) && v >= 0 && v <= 100) { state.shares.party2 = v; applied = true; }
+      }
+      return applied;
+    } catch (e) { return false; }
+  }
+
+  function buildShareUrl() {
+    const base = window.location.origin + window.location.pathname;
+    const params = new URLSearchParams({
+      cap: String(state.capital),
+      cur: state.currency,
+      m: String(state.monthlyPct),
+      i: String(state.shares.investor),
+      p1: String(state.shares.party1),
+      p2: String(state.shares.party2)
+    });
+    return base + "?" + params.toString();
   }
 
   function parseNumberLoose(raw) {
@@ -930,9 +1029,11 @@
   });
 
   function init() {
-    const restored = restoreState();
-    if (restored) {
-      // Apply saved state to DOM — these wins over HTML default values
+    const fromUrl = readUrlParams();
+    const restored = !fromUrl && restoreState();
+
+    if (fromUrl || restored) {
+      // Push state to DOM — these win over HTML default values
       $currency.value = state.currency;
       $capital.value = formatNumberPlain(state.capital, 0);
       $monthly.value = formatNumberPlain(state.monthlyPct, 2);
@@ -940,7 +1041,6 @@
       $shareParty1.value = formatNumberPlain(state.shares.party1, 0);
       $shareParty2.value = formatNumberPlain(state.shares.party2, 0);
     } else {
-      // No saved state — read defaults from DOM into state
       readCapital();
       readShares();
       state.monthlyPct = parseNumberLoose($monthly.value);
@@ -948,6 +1048,10 @@
     state.yearlyPct = monthlyToYearly(state.monthlyPct);
     $capital.value = formatNumberPlain(state.capital, 0);
     $capital.dataset.lastValid = $capital.value;
+
+    // Persist URL-loaded values so subsequent reloads (without params) still show them
+    if (fromUrl) saveState();
+
     render();
   }
   init();
@@ -956,7 +1060,35 @@
   window.__resetDashboard = function () {
     if (confirm("Reset all values to defaults? Your saved data will be cleared.")) {
       clearState();
-      location.reload();
+      // Strip any URL params so we land on real defaults
+      const cleanUrl = window.location.origin + window.location.pathname;
+      window.location.replace(cleanUrl);
+    }
+  };
+
+  // Expose share-link generator for the footer button
+  window.__shareDashboard = function () {
+    const url = buildShareUrl();
+    const btn = document.getElementById("shareBtn");
+    const flash = function (msg) {
+      if (!btn) return;
+      const original = btn.dataset.original || "Share link";
+      btn.dataset.original = original;
+      btn.textContent = msg;
+      btn.classList.add("copied");
+      setTimeout(function () {
+        btn.textContent = original;
+        btn.classList.remove("copied");
+      }, 2200);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url).then(function () {
+        flash("✓ Link copied");
+      }).catch(function () {
+        window.prompt("Copy this link to share:", url);
+      });
+    } else {
+      window.prompt("Copy this link to share:", url);
     }
   };
 })();
